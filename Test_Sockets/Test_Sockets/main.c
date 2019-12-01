@@ -1,122 +1,99 @@
-#include <winsock2.h>
-//Inclusion de winsock2.h
+#if defined (WIN32)
+    #include <winsock2.h>
+    typedef int socklen_t;
+#elif defined (linux)
+    #include <sys/types.h>
+    #include <sys/socket.h>
+    #include <netinet/in.h>
+    #include <arpa/inet.h>
+    #include <unistd.h>
+    #define INVALID_SOCKET -1
+    #define SOCKET_ERROR -1
+    #define closesocket(s) close(s)
+    typedef int SOCKET;
+    typedef struct sockaddr_in SOCKADDR_IN;
+    typedef struct sockaddr SOCKADDR;
+#endif
+
 #include <stdio.h>
 #include <stdlib.h>
-
-//Note ne pas oublier d'ajouter le fichier "libws2_32.a" dans l'éditeur de lien, via un clique droit sur le projet >> Build options >> linker settings >> add >> sélection de "libws2_32.a"
-
-//Les typedef
-
-typedef int socklen_t; //Création du type socklen_t pour éviter les problème de compilation.
+#define PORT 23
 
 
-//Les struct
 
-struct sockaddr_in //Cette structure va nous permettre de paramétrer la socket.
+int main(void)
 {
-    short sin_family;
-    unsigned short sin_port;
-    struct in_addr sin_addr;
-    char sin_zero[8];
-};
-/*sin.sin_addr.s_addr sera l'IP donnée automatiquement au serveur. Pour le connaître nous utiliserons la fonction htonl avec comme seul paramètre la valeur INADDR_ANY.
-Si vous voulez spécifier une adresse IP precise à utiliser, il est possible d'utiliser la fonction inet_addr avec comme seul paramètre l'IP dans une chaine de caractères :
+    #if defined (WIN32)
+        WSADATA WSAData;
+        int erreur = WSAStartup(MAKEWORD(2,2), &WSAData);
+    #else
+        int erreur = 0;
+    #endif
 
-inet_addr("127.0.0.1");
-sin.sin_family sera toujours égal à AF_INET dans notre cas (en savoir plus).
-
-Et sin.sin_port sera égal à la valeur retournée par la fonction htons, avec comme paramètre le port utilisé.
-
-Le champ sin_zero ne sera pas utilisé.*/
-
-
-//Les Prototypes
-
-int socket(int domain, int type, int protocol); //Pour créer la socket il nous faut cette fonction.
-int bind(int socket, const struct sockaddr* addr, socklen_t addrlen);//Pour associer à la socket les informations de la structure précédemment déclarée.
-int listen(int socket, int backlog); //Pour mettre la socket en état d'écoute.
-int accept(int socket, struct sockaddr* addr, socklen_t* addrlen);//Cette fonction permet la connexion client/serveur en acceptant un appel de connexion.*/
-int closesocket(int sock); //Pour fermer la connexion.
-
-int main()
-{
-    WSADATA WSAData; //Initialise la bibliothèque WinSock
-    WSAStartup(MAKEWORD(2,2), &WSAData); //La Macro MAKEWORD transforme les deux entiers d'un octet en paramètres en un entier de deux octes qu'elle retourne.
-    //Ceci va permettre de renseigner la version que l'utilisateur souhaite utiliser, soit 2.0 ici et elle retourne la valeur 0 si tout s'est bien passé.
-    WSACleanup(); //Cette fonction libère les ressources allouées pour la fonction WSAStartup().
-
-    SOCKET sock;
-
-    //Déclaration et initialisation de la structure de type SOCKADDR_IN
+    /* Socket et contexte d'adressage du serveur */
     SOCKADDR_IN sin;
-    sin.sin_addr.s_addr = htonl(INADDR_ANY);
-    sin.sin_family = AF_INET;
-    sin.sin_port = htons(23);
+    SOCKET sock;
+    socklen_t recsize = sizeof(sin);
 
-    bind(sock, SOCKADDR*&sin, sizeof(sin)); //Utilisation de la fonction bind.
+    /* Socket et contexte d'adressage du client */
+    SOCKADDR_IN csin;
+    SOCKET csock;
+    socklen_t crecsize = sizeof(csin);
 
-    listen(sock, 5); //Utilisation de la fonction listen.
+    int sock_err;
 
-    socklen_t taille = sizeof(csin); //Utilisation de la fonction accepte.
-    csock = accept(sock, (SOCKADDR*)&csin, &taille);
 
-    return 0;
-}
+    if(!erreur)
+    {
+        /* Création d'une socket */
+        sock = socket(AF_INET, SOCK_STREAM, 0);
 
-int socket(int domain, int type, int protocol) //Pour créer la socket il nous faut cette fonction.
-/*La fonction retourne une socket créée à partir des paramètres qui suivent.
+        /* Si la socket est valide */
+        if(sock != INVALID_SOCKET)
+        {
+            printf("La socket %d est maintenant ouverte en mode TCP/IP\n", sock);
 
-Le paramètre domain représente la famille de protocoles utilisée.
-Il prend la valeur AF_INET pour le protocole TCP/IP.
-Sinon, il prend la valeur AF_UNIX pour les communications UNIX en local sur une même machine.
+            /* Configuration */
+            sin.sin_addr.s_addr = htonl(INADDR_ANY);  /* Adresse IP automatique */
+            sin.sin_family = AF_INET;                 /* Protocole familial (IP) */
+            sin.sin_port = htons(PORT);               /* Listage du port */
+            sock_err = bind(sock, (SOCKADDR*)&sin, recsize);
 
-Le type indique le type de service, il peut avoir les valeurs suivantes :
+            /* Si la socket fonctionne */
+            if(sock_err != SOCKET_ERROR)
+            {
+                /* Démarrage du listage (mode server) */
+                sock_err = listen(sock, 5);
+                printf("Listage du port %d...\n", PORT);
 
-SOCK_STREAM, si on utilise le protocole TCP/IP.
+                /* Si la socket fonctionne */
+                if(sock_err != SOCKET_ERROR)
+                {
+                    /* Attente pendant laquelle le client se connecte */
+                    printf("Patientez pendant que le client se connecte sur le port %d...\n", PORT);
+                    csock = accept(sock, (SOCKADDR*)&csin, &crecsize);
+                    printf("Un client se connecte avec la socket %d de %s:%d\n", csock, inet_ntoa(csin.sin_addr), htons(csin.sin_port));
+                }
+                else
+                    perror("listen");
+            }
+            else
+                perror("bind");
 
-SOCK_DGRAM, si on utilise le protocole UDP/IP.
+            /* Fermeture de la socket client et de la socket serveur */
+            printf("Fermeture de la socket client\n");
+            closesocket(csock);
+            printf("Fermeture de la socket serveur\n");
+            closesocket(sock);
+            printf("Fermeture du serveur terminée\n");
+        }
+        else
+            perror("socket");
 
-Nous utiliserons donc la première (notez qu'il en existe d'autres comme SOCK_RAW mais ils nous seront inutiles).
+        #if defined (WIN32)
+            WSACleanup();
+        #endif
+    }
 
-Dans le cas de la suite TCP/IP, le paramètre protocol n'est pas utile, on le mettra ainsi toujours à 0.
-Comme dans notre cas nous utiliserons le protocole TCP/IP, notre fonction sera toujours :
-
-sock = socket(AF_INET, SOCK_STREAM, 0);*/
-{
-}
-
-int bind(int socket, const struct sockaddr* addr, socklen_t addrlen)//Pour associer à la socket les informations de la structure précédemment déclarée.
-/*La fonction retourne SOCKET_ERROR en cas d'erreur (en savoir plus).
-
-Le paramètre socket désigne la socket du serveur avec laquelle on va associer les informations.
-
-Le paramètre addr est un pointeur de structure sockaddr du serveur.
-Il spécifie l'IP à laquelle on se connecte... Comme la fonction a besoin d'un pointeur sur structure sockaddr, et que nous disposons que d'une structure SOCKADDR_IN, nous allons faire un cast, pour éviter que le compilateur nous retourne une erreur lors de la compilation.
-
-Le paramètre addrlen sera la taille mémoire occupée par le contexte d'adressage du serveur (notre structure SOCKADDR_IN), nous utiliserons donc sizeof ;) (si vous ne vous rappelez plus du cours de m@teo21, je vous conseil de relire le cours sur l'allocation dynamique :p ).*/
-{
-}
-
-int listen(int socket, int backlog) //Pour mettre la socket en état d'écoute.
-/*La fonction retourne SOCKET_ERROR si une erreur est survenue.
-
-Le paramètre socket désigne la socket qui va être utilisée.
-
-Le paramètre backlog représente le nombre maximal de connexions pouvant être mises en attente.*/
-{
-}
-
-int accept(int socket, struct sockaddr* addr, socklen_t* addrlen);//Cette fonction permet la connexion client/serveur en acceptant un appel de connexion.*/
-/*La fonction retourne la valeur INVALID_SOCKET en cas d'échec. Sinon, elle retourne la socket du client.
-
-Le paramètre socket est, comme dans les autre fonctions, la socket serveur utilisée.
-
-Le paramètre addr est un pointeur sur le contexte d'adressage du client.
-
-Le paramètre addrlen ne s'utilise pas comme dans la fonction bind ; ici, il faut créer une variable taille de type socklen_t (qui n'est rien d'autre qu'un entier), égale à la taille du contexte d'adressage du client. Ensuite, il faudra passer l'adresse de cette variable en paramètre.*/
-{
-}
-
-int closesocket(int sock); //Pour fermer la connexion.
-{
+    return EXIT_SUCCESS;
 }
