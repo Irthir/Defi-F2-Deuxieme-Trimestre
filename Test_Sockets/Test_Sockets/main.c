@@ -20,7 +20,6 @@
 #define PORT 23
 
 
-
 int main(void)
 {
     #if defined (WIN32)
