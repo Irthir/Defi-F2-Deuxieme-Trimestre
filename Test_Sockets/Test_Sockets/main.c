@@ -20,7 +20,8 @@
 #include <string.h>
 #define PORT 23
 
-
+//PROTOTYPES
+void showHost();
 
 int main(void)
 {
@@ -58,6 +59,9 @@ int main(void)
             /* Si la socket fonctionne */
             if(sock_err != SOCKET_ERROR)
             {
+                //Tentative d'affichage de l'IP.
+                showHost();
+
                 /* Démarrage du listage (mode server) */
                 sock_err = listen(sock, 5);
                 printf("Listage du port %d...\n", PORT);
@@ -98,4 +102,17 @@ int main(void)
     getchar();
 
     return EXIT_SUCCESS;
+}
+
+void showHost()
+{
+    char hostname[1024];
+    hostname[1023] = '\0';
+    gethostname(hostname, 1023);
+    //printf("Hostname: %s\n", hostname);
+    struct hostent* remoteHost;
+    remoteHost = gethostbyname(hostname);
+    char* ip;
+    ip = inet_ntoa(*(struct in_addr *)*remoteHost->h_addr_list);
+    printf("Votre adresse IP est : %s.\n", ip);
 }
