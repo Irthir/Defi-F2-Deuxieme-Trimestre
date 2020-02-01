@@ -1,38 +1,27 @@
-#if defined (WIN32)
-    #include <winsock2.h>
-    typedef int socklen_t;
-#elif defined (linux)
-    #include <sys/types.h>
-    #include <sys/socket.h>
-    #include <netinet/in.h>
-    #include <arpa/inet.h>
-    #include <unistd.h>
-    #define INVALID_SOCKET -1
-    #define SOCKET_ERROR -1
-    #define closesocket(s) close(s)
-    typedef int SOCKET;
-    typedef struct sockaddr_in SOCKADDR_IN;
-    typedef struct sockaddr SOCKADDR;
-#endif
+#include <winsock2.h>
+typedef int socklen_t;
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #define PORT 23
 
 
 
 int main(void)
 {
-    #if defined (WIN32)
-        WSADATA WSAData;
-        int erreur = WSAStartup(MAKEWORD(2,2), &WSAData);
-    #else
-        int erreur = 0;
-    #endif
+    WSADATA WSAData;
+    int erreur = WSAStartup(MAKEWORD(2,2), &WSAData);
+
 
     SOCKET sock;
     SOCKADDR_IN sin;
     char buffer[32] = "";
+
+    SOCKET csock;
+    SOCKADDR_IN csin;
+    socklen_t recsize = sizeof(csin);
+    int sock_err;
 
     /* Si les sockets Windows fonctionnent */
     if(!erreur)
@@ -48,11 +37,27 @@ int main(void)
         /* Si l'on a réussi à se connecter */
         if(connect(sock, (SOCKADDR*)&sin, sizeof(sin)) != SOCKET_ERROR)
         {
-            printf("Connection à %s sur le port %d\n", inet_ntoa(sin.sin_addr), htons(sin.sin_port));
+            printf("Connection a %s sur le port %d\n", inet_ntoa(sin.sin_addr), htons(sin.sin_port));
 
             /* Si l'on reçoit des informations : on les affiche à l'écran */
-            if(recv(sock, buffer, 32, 0) != SOCKET_ERROR)
-                printf("Recu : %s\n", buffer);
+            while (buffer!="Quit")
+            {
+                if(recv(sock, buffer, 32, 0) != SOCKET_ERROR)
+                    printf("Recu : %s\n", buffer);
+
+                printf("Ecrivez un message\n");
+
+                fflush(stdin);
+
+                fgets(buffer,sizeof(buffer),stdin);
+
+                sock_err = send(sock, buffer, 32, 0);
+
+                if(sock_err != SOCKET_ERROR)
+                    printf("Chaine envoyee : %s\n", buffer);
+                else
+                    printf("Erreur de transmission\n");
+            }
         }
         /* sinon, on affiche "Impossible de se connecter" */
         else
